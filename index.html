@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cek Blob WalrusScan</title>
+</head>
+<body>
+  <h1>Cek Blob History WalrusScan</h1>
+  <form id="blobForm">
+    <input type="text" id="walletAddress" placeholder="Masukkan alamat wallet" required style="width:300px;">
+    <button type="submit">Cek Blob</button>
+  </form>
+  <div id="result" style="margin-top:20px;"></div>
+
+  <script>
+    document.getElementById('blobForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const address = document.getElementById('walletAddress').value.trim();
+      const resultDiv = document.getElementById('result');
+      resultDiv.innerHTML = 'Loading...';
+
+      try {
+        const response = await fetch(
+          `https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${address}?page=0&size=20&orderBy=DESC&sortBy=TIMESTAMP`,
+          {
+            headers: {
+              'accept': '*/*',
+              'x-api-key': '39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1' // GANTI dengan API keymu
+            }
+          }
+        );
+
+        const data = await response.json();
+
+        if (data.content && data.content.length > 0) {
+          let html = '';
+          data.content.forEach(blob => {
+            const waktu = new Date(blob.timestamp).toLocaleString();
+            html += `${blob.blobId} - ${waktu}<br>`;
+          });
+          resultDiv.innerHTML = html;
+        } else {
+          resultDiv.innerHTML = 'Tidak ada blob ditemukan.';
+        }
+      } catch (err) {
+        resultDiv.innerHTML = 'Error: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -6,7 +6,7 @@
   <title>Cek Blob WalrusScan</title>
 </head>
 <body>
-  <h1>Cek Blob History WalrusScan</h1>
+  <h1>Blob History WalrusScan</h1>
   <form id="blobForm">
     <input type="text" id="walletAddress" placeholder="Masukkan alamat wallet" required style="width:300px;">
     <button type="submit">Cek Blob</button>
@@ -37,7 +37,7 @@
           let html = '';
           data.content.forEach(blob => {
             const waktu = new Date(blob.timestamp).toLocaleString();
-            html += `${blob.blobBase64} - ${waktu}<br>`;
+            html += `${blob.blobIdBase64} - ${waktu}<br>`;
           });
           resultDiv.innerHTML = html;
         } else {

@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Cek Blob Walrus - Public Key Soundness</title>
+  <title>Cek Blob Walrus dari Public Key Soundness</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 30px; }
     input { width: 500px; padding: 8px; }
@@ -13,7 +13,7 @@
   </style>
 </head>
 <body>
-  <h2>Cek Blob Walrus dari Public Key Soundness</h2>
+  <h2>Cek Blob Walrus - Public Key Soundness</h2>
   <p>Paste <b>Public Key</b> dari <code>soundness-cli list-keys</code>:</p>
   <input type="text" id="pubkey" placeholder="ThwbEh6idRlMGs/...">
   <button onclick="cekBlob()">Cek</button>
@@ -49,7 +49,7 @@
 
       console.log("Sui Address:", suiAddress);
 
-      const apiKey = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1"; // Ganti dengan API Key Blockberry
+      const apiKey = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1"; // API Key kamu
       const resp = await fetch(`https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${suiAddress}?page=0&size=20&orderBy=DESC&sortBy=TIMESTAMP`, {
         headers: {
           "accept": "application/json",
@@ -64,9 +64,10 @@
       const data = await resp.json();
 
       if (!data.data || data.data.length === 0) {
-        hasilEl.innerHTML = "<p>Tidak ada blob ditemukan.</p>";
+        hasilEl.innerHTML = `<p>Sui Address: <b>${suiAddress}</b></p><p>Tidak ada blob ditemukan.</p>`;
       } else {
-        let html = "<table><tr><th>Blob Base64</th><th>Dibuat</th></tr>";
+        let html = `<p>Sui Address: <b>${suiAddress}</b></p>`;
+        html += "<table><tr><th>Blob ID Base64</th><th>Dibuat</th></tr>";
         for (const blob of data.data) {
           html += `<tr><td>${blob.blobIdBase64}</td><td>${blob.createdAt}</td></tr>`;
         }

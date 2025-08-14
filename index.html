@@ -1,134 +1,67 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>Cek Blob Walrus</title>
-<script src="https://cdn.jsdelivr.net/npm/blakejs@1.2.1/blake2b.min.js"></script>
-<style>
-    body { font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9; }
-    input { width: 450px; padding: 8px; }
-    button { padding: 8px 14px; margin-left: 5px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; background: white; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background: #333; color: white; }
-    #status { margin-top: 15px; font-weight: bold; }
-</style>
+  <meta charset="UTF-8">
+  <title>Cek Blob Walrus dari Public Key Soundness</title>
 </head>
 <body>
-<h2>Cek Blob Walrus dari Public Key atau Address</h2>
-<p>Masukkan <b>public key Base64</b> atau <b>address Sui</b>.</p>
-<input type="text" id="inputValue" placeholder="Public key atau address Sui">
-<button onclick="cekBlob()">Cek</button>
-<div id="status"></div>
+  <h2>Cek Blob Walrus dari Public Key Soundness</h2>
+  <input id="pubkey" type="text" placeholder="Paste Public Key Soundness di sini" style="width: 400px;">
+  <button onclick="cekBlob()">Cek</button>
+  <pre id="result"></pre>
 
-<table id="resultTable" style="display:none;">
-    <thead>
-        <tr>
-            <th>Blob list</th>
-            <th>Waktu Dibuat</th>
-        </tr>
-    </thead>
-    <tbody></tbody>
-</table>
+<script type="module">
+import { blake2b } from "https://cdn.jsdelivr.net/npm/@noble/hashes@1.3.2/blake2b.js";
 
-<script>
-async function cekBlob() {
-    let val = document.getElementById('inputValue').value.trim();
-    if (!val) {
-        alert("Masukkan public key atau address Sui!");
-        return;
-    }
-
-    document.getElementById('status').innerText = "⏳ Memproses...";
-    document.getElementById('resultTable').style.display = "none";
-
-    let address = val;
-
-    // Jika bukan address (0x...), berarti public key → konversi
-    if (!val.startsWith("0x")) {
-        try {
-            address = publicKeyToSuiAddress(val);
-            document.getElementById('status').innerText = "✅ Public key dikonversi ke address: " + address;
-        } catch (e) {
-            document.getElementById('status').innerText = "❌ Public key tidak valid: " + e.message;
-            return;
-        }
-    } else {
-        document.getElementById('status').innerText = "✅ Menggunakan address: " + address;
-    }
-
-    let apiKey = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1";
-    let url = `https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${address}?page=0&size=20&orderBy=DESC&sortBy=TIMESTAMP`;
-
+async function publicKeyToSuiAddress(pubKeyB64) {
     try {
-        let res = await fetch(url, {
+        const rawKey = Uint8Array.from(atob(pubKeyB64), c => c.charCodeAt(0));
+        if (rawKey.length !== 32) {
+            throw new Error("Public key harus 32 byte setelah Base64 decode");
+        }
+        // Prefix 0x00 untuk Ed25519
+        const prefixed = new Uint8Array(1 + rawKey.length);
+        prefixed[0] = 0x00;
+        prefixed.set(rawKey, 1);
+        const hash = blake2b(prefixed, { dkLen: 32 });
+        return "0x" + Array.from(hash).map(b => b.toString(16).padStart(2, "0")).join("");
+    } catch (e) {
+        throw new Error("Public key tidak valid: " + e.message);
+    }
+}
+
+async function cekBlob() {
+    const pubKey = document.getElementById("pubkey").value.trim();
+    const output = document.getElementById("result");
+    output.textContent = "Mengonversi public key menjadi alamat Sui...\n";
+    try {
+        const suiAddress = await publicKeyToSuiAddress(pubKey);
+        output.textContent += `Alamat Sui: ${suiAddress}\n\nMengambil blob history...\n`;
+
+        const apiKey = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1"; // ganti dengan API key Blockberry
+        const url = `https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${suiAddress}`;
+        const res = await fetch(url, {
             headers: {
-                "accept": "*/*",
+                "accept": "application/json",
                 "x-api-key": apiKey
             }
         });
-        if (!res.ok) {
-            document.getElementById('status').innerText = `❌ HTTP ${res.status}: ${res.statusText}`;
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        if (!data || data.length === 0) {
+            output.textContent += "Tidak ada blob ditemukan.";
             return;
         }
-        let data = await res.json();
-        tampilkanData(data.content);
+
+        let resultText = "Daftar Blob:\n";
+        for (const blob of data) {
+            resultText += `- blobIdBase64: ${blob.blobIdBase64}\n  createdAt: ${blob.createdAt}\n\n`;
+        }
+        output.textContent = resultText;
     } catch (err) {
-        console.error(err);
-        document.getElementById('status').innerText = "❌ Gagal mengambil data!";
+        output.textContent += "Error: " + err.message;
     }
-}
-
-function tampilkanData(content) {
-    let tbody = document.querySelector("#resultTable tbody");
-    tbody.innerHTML = "";
-    if (!content || content.length === 0) {
-        tbody.innerHTML = "<tr><td colspan='2'>Tidak ada blob ditemukan</td></tr>";
-    } else {
-        content.forEach(item => {
-            let tr = document.createElement("tr");
-
-            let tdBlob = document.createElement("td");
-            tdBlob.innerText = item.blobIdBase64;
-
-            let tdTime = document.createElement("td");
-            let date = new Date(item.timestamp / 1_000_000).toLocaleString();
-            tdTime.innerText = date;
-
-            tr.appendChild(tdBlob);
-            tr.appendChild(tdTime);
-            tbody.appendChild(tr);
-        });
-    }
-    document.getElementById('resultTable').style.display = "table";
-}
-
-function publicKeyToSuiAddress(base64Key) {
-    // Tambahkan padding jika hilang
-    while (base64Key.length % 4 !== 0) {
-        base64Key += "=";
-    }
-
-    // Decode Base64
-    let publicKeyBytes;
-    try {
-        publicKeyBytes = Uint8Array.from(atob(base64Key), c => c.charCodeAt(0));
-    } catch {
-        throw new Error("Base64 tidak valid");
-    }
-
-    if (publicKeyBytes.length !== 32) {
-        throw new Error("Panjang public key bukan 32 byte (bukan ed25519)");
-    }
-
-    // Prefix 0x00 untuk ed25519
-    const prefixed = new Uint8Array(publicKeyBytes.length + 1);
-    prefixed[0] = 0x00;
-    prefixed.set(publicKeyBytes, 1);
-
-    // Hash Blake2b-256
-    const hash = blake2b(prefixed, null, 32);
-    return "0x" + Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 </script>
 </body>

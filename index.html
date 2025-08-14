@@ -1,52 +1,116 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cek Blob WalrusScan</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cek Blob Walrus (Soundness)</title>
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;max-width:800px;margin:40px auto;padding:0 16px}
+    h1{font-size:20px}
+    .row{display:flex;gap:8px}
+    input{flex:1;padding:10px;border:1px solid #ccc;border-radius:8px}
+    button{padding:10px 14px;border:0;border-radius:8px;cursor:pointer}
+    .hint{color:#666;font-size:12px;margin-top:6px}
+    .item{padding:8px 0;border-bottom:1px dashed #eee}
+    .b64{font-family:monospace;word-break:break-all;cursor:pointer}
+    .muted{color:#666;font-size:12px}
+    .err{color:#b00020}
+  </style>
 </head>
 <body>
-  <h1>Blob History WalrusScan</h1>
-  <form id="blobForm">
-    <input type="text" id="walletAddress" placeholder="Masukkan alamat wallet" required style="width:300px;">
-    <button type="submit">Cek Blob</button>
+  <h1>Cek Blob Walrus dari Alamat Sui</h1>
+  <div class="hint">
+    Paste <b>alamat/public key Sui</b> yang dipakai di Soundness (lihat dengan <code>soundness-cli list-keys</code>).
+  </div>
+
+  <form id="form" class="row" autocomplete="off">
+    <input id="addr" placeholder="contoh: 0xe2964015d7...ee060" required />
+    <button id="check" type="submit">Cek</button>
   </form>
-  <div id="result" style="margin-top:20px;"></div>
+
+  <div class="hint">Tips: klik blobBase64 untuk <i>copy</i>.</div>
+  <div id="status" class="muted" style="margin-top:10px;"></div>
+  <div id="list" style="margin-top:12px;"></div>
+  <div id="moreWrap" style="margin-top:12px;display:none">
+    <button id="moreBtn">Muat lagi</button>
+  </div>
 
   <script>
-    document.getElementById('blobForm').addEventListener('submit', async function(e) {
-      e.preventDefault();
-      const address = document.getElementById('walletAddress').value.trim();
-      const resultDiv = document.getElementById('result');
-      resultDiv.innerHTML = 'Loading...';
+    const API_KEY = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1"; // TODO: ganti dengan API key kamu
+    const BASE = "https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts";
+    let page = 0, lastAddress = "", busy = false;
 
-      try {
-        const response = await fetch(
-          `https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${address}?page=0&size=20&orderBy=DESC&sortBy=TIMESTAMP`,
-          {
-            headers: {
-              'accept': '*/*',
-              'x-api-key': '39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1' // GANTI dengan API keymu
-            }
-          }
-        );
+    const el = (id) => document.getElementById(id);
+    const statusEl = el('status'), listEl = el('list'), moreWrap = el('moreWrap'), moreBtn = el('moreBtn');
 
-        const data = await response.json();
+    function fmtTime(ts){
+      try{ return new Date(ts).toLocaleString(); }catch{ return ts }
+    }
+    function line(blob){
+      const wrap = document.createElement('div');
+      wrap.className = 'item';
+      const b64 = document.createElement('div');
+      b64.className = 'b64';
+      b64.textContent = blob.blobBase64 || "(tanpa blobBase64)";
+      b64.title = "Klik untuk copy";
+      b64.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(b64.textContent); b64.style.opacity = 0.6; setTimeout(()=>b64.style.opacity=1,400); }
+        catch(e){ alert('Gagal menyalin'); }
+      });
+      const time = document.createElement('div');
+      time.className = 'muted';
+      time.textContent = fmtTime(blob.timestamp);
+      wrap.appendChild(b64);
+      wrap.appendChild(time);
+      return wrap;
+    }
 
-        if (data.content && data.content.length > 0) {
-          let html = '';
-          data.content.forEach(blob => {
-            const waktu = new Date(blob.timestamp).toLocaleString();
-            html += `${blob.blobIdBase64} - ${waktu}<br>`;
-          });
-          resultDiv.innerHTML = html;
-        } else {
-          resultDiv.innerHTML = 'Tidak ada blob ditemukan.';
-        }
-      } catch (err) {
-        resultDiv.innerHTML = 'Error: ' + err.message;
+    async function fetchPage(address, pg){
+      const url = `${BASE}/${encodeURIComponent(address)}?page=${pg}&size=20&orderBy=DESC&sortBy=TIMESTAMP`;
+      const res = await fetch(url, { headers: { accept: "*/*", "x-api-key": API_KEY } });
+      if(!res.ok){
+        const text = await res.text().catch(()=>res.statusText);
+        throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
       }
+      return res.json();
+    }
+
+    async function load(address, reset=false){
+      if(busy) return;
+      busy = true;
+      statusEl.textContent = "Loading...";
+      try{
+        if(reset){ listEl.innerHTML = ""; page = 0; }
+        const data = await fetchPage(address, page);
+        const items = (data && data.content) ? data.content : [];
+        if(items.length === 0 && page === 0){
+          statusEl.textContent = "Tidak ada blob ditemukan.";
+          moreWrap.style.display = "none";
+          busy = false;
+          return;
+        }
+        items.forEach(b => listEl.appendChild(line(b)));
+        statusEl.textContent = `Menampilkan ${listEl.children.length} item`;
+        // tampilkan tombol "Muat lagi" jika masih ada halaman berikutnya
+        moreWrap.style.display = items.length === 20 ? "block" : "none";
+        page++;
+      }catch(err){
+        statusEl.innerHTML = `<span class="err">${err.message}</span>`;
+        moreWrap.style.display = "none";
+      }finally{
+        busy = false;
+      }
+    }
+
+    el('form').addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const address = el('addr').value.trim();
+      if(!address) return;
+      lastAddress = address;
+      load(address, true);
     });
+
+    moreBtn.addEventListener('click', ()=>{ if(lastAddress) load(lastAddress, false); });
   </script>
 </body>
 </html>

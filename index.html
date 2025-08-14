@@ -15,7 +15,7 @@
 </head>
 <body>
 
-  <h2>Cek Blob Walrus xx Public Key Soundness</h2>
+  <h2>Cek Blob Walrus y Public Key Soundness</h2>
   <p>Paste <b>Public Key</b> dari <code>soundness-cli list-keys</code>:</p>
   <input type="text" id="publicKey" placeholder="Masukkan Public Key Base64">
   <button onclick="cekBlob()">Cek</button>
@@ -48,12 +48,12 @@
         // Hash BLAKE2b-256
         let hash = blake2b(publicKeyBytes, null, 32);
 
-        // Ambil 32 byte terakhir → Address
+        // Convert ke hex address
         let addressHex = Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('');
 
         statusEl.innerHTML = `<span class="loading">Alamat Sui: ${addressHex} — Mengambil blob history...</span>`;
 
-        // Fetch dari API kamu
+        // Panggil API
         const API_KEY = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1";
         let resp = await fetch(`https://walrus-api.onrender.com/api/blobs/${addressHex}?apikey=${API_KEY}`);
         

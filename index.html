@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Cek Blob Walrus dari Public Key Soundness</title>
+  <title>Cek Blob Walrus - Public Key Soundness</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 30px; }
     input { width: 500px; padding: 8px; }
@@ -13,12 +13,15 @@
   </style>
 </head>
 <body>
-  <h2>Cek Blob Walrus from Public Key Soundness</h2>
+  <h2>Cek Blob Walrus dari Public Key Soundness</h2>
   <p>Paste <b>Public Key</b> dari <code>soundness-cli list-keys</code>:</p>
   <input type="text" id="pubkey" placeholder="ThwbEh6idRlMGs/...">
   <button onclick="cekBlob()">Cek</button>
   <div id="loading">⏳ Mengonversi public key & mengambil data...</div>
   <div id="hasil"></div>
+
+  <!-- Load BlakeJS dari CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/blakejs@1.2.1/blake2b.min.js"></script>
 
 <script>
   async function cekBlob() {
@@ -40,13 +43,14 @@
       prefixed[0] = 0;
       prefixed.set(pubKeyBytes, 1);
 
-      // Blake2b 32-byte hash (pakai implementasi ringan)
-      const suiAddress = "0x" + toHex(blake2b(prefixed, 32));
+      // Hash BLAKE2b → 32 byte
+      const hashBytes = blake2b(prefixed, null, 32);
+      const suiAddress = "0x" + toHex(hashBytes);
 
       console.log("Sui Address:", suiAddress);
 
-      const apiKey = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1";
-      const resp = await fetch(`https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${suiAddress}`, {
+      const apiKey = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1"; // Ganti dengan API Key Blockberry
+      const resp = await fetch(`https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${suiAddress}?page=0&size=20&orderBy=DESC&sortBy=TIMESTAMP`, {
         headers: {
           "accept": "application/json",
           "x-api-key": apiKey
@@ -78,20 +82,6 @@
 
   function toHex(bytes) {
     return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
-  }
-
-  // Blake2b minimal implementation (pure JS)
-  // Source: https://github.com/dcposch/blakejs/blob/master/blake2b.js (potongan penting)
-  function blake2b(input, outlen) {
-    // Untuk ringkas, ini sudah saya sederhanakan
-    // Ambil versi lengkap dari blakejs jika ingin 100% sesuai
-    return new Uint8Array(crypto.subtle.digestSync 
-      ? crypto.subtle.digestSync("BLAKE2B-256", input) // Chrome 122+
-      : blake2bFallback(input, outlen));
-  }
-
-  function blake2bFallback(input, outlen) {
-    throw new Error("Browser ini tidak mendukung BLAKE2b native. Gunakan CDN blakejs atau polyfill.");
   }
 </script>
 </body>

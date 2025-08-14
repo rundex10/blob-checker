@@ -51,7 +51,7 @@
       wrap.className = 'item';
       const b64 = document.createElement('div');
       b64.className = 'b64';
-      b64.textContent = blob.blobBase64 || "(tanpa blobBase64)";
+      b64.textContent = blob.blobIdBase64 || "(tanpa blobBase64)";
       b64.title = "Klik untuk copy";
       b64.addEventListener('click', async () => {
         try { await navigator.clipboard.writeText(b64.textContent); b64.style.opacity = 0.6; setTimeout(()=>b64.style.opacity=1,400); }

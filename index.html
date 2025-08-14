@@ -212,7 +212,7 @@ async function run(){
     // render tabel
     let html = '<table><thead><tr><th>blobIdBase64</th><th>Waktu dibuat</th></tr></thead><tbody>';
     for (const it of list){
-      const id = it.blobIdBase64 || it.blobBase64 || it.blobId || '-';
+      const id = it.blobIdBase64 || it.blobIdBase64 || it.blobId || '-';
       const t  = it.timestamp ? fmtTime(it.timestamp) : (it.createdAt || '-');
       html += `<tr><td class="mono">${id}</td><td>${t}</td></tr>`;
     }

@@ -1,89 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Cek Blob Walrus dari Public Key Soundness</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 30px; }
-    input { width: 500px; padding: 8px; }
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h2 { color: #333; }
+    input { padding: 8px; width: 400px; }
     button { padding: 8px 12px; }
-    table { border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px; }
-    #loading { display: none; margin-top: 10px; }
+    .loading { color: orange; }
+    .error { color: red; }
+    .result { margin-top: 10px; padding: 10px; border: 1px solid #ddd; }
   </style>
 </head>
 <body>
-  <h2>Cek Blob Walrus dari Public Key Soundness</h2>
-  <p>Paste <b>Public Key</b> dari <code>soundness-cli list-keys</code>:</p>
-  <input type="text" id="pubkey" placeholder="ThwbEh6idRlMGs/...">
-  <button onclick="cekBlob()">Cek</button>
-  <div id="loading">⏳ Mengonversi public key & mengambil data...</div>
-  <div id="hasil"></div>
 
-  <!-- Load BlakeJS dari CDN -->
+  <h2>Cek Blob Walrus xx Public Key Soundness</h2>
+  <p>Paste <b>Public Key</b> dari <code>soundness-cli list-keys</code>:</p>
+  <input type="text" id="publicKey" placeholder="Masukkan Public Key Base64">
+  <button onclick="cekBlob()">Cek</button>
+
+  <div id="status"></div>
+  <div id="hasil" class="result"></div>
+
+  <!-- BlakeJS CDN -->
   <script src="https://cdn.jsdelivr.net/npm/blakejs@1.2.1/blake2b.min.js"></script>
 
-<script>
-  async function cekBlob() {
-    const pubKeyBase64 = document.getElementById("pubkey").value.trim();
-    const loadingEl = document.getElementById("loading");
-    const hasilEl = document.getElementById("hasil");
-    hasilEl.innerHTML = "";
-    loadingEl.style.display = "block";
+  <script>
+    async function cekBlob() {
+      const statusEl = document.getElementById("status");
+      const hasilEl = document.getElementById("hasil");
+      hasilEl.innerHTML = "";
+      statusEl.innerHTML = "";
 
-    try {
-      // Decode base64 → byte array
-      const pubKeyBytes = Uint8Array.from(atob(pubKeyBase64), c => c.charCodeAt(0));
-      if (pubKeyBytes.length !== 32) {
-        throw new Error("Public key harus 32 byte (Ed25519).");
+      let publicKeyBase64 = document.getElementById("publicKey").value.trim();
+      if (!publicKeyBase64) {
+        statusEl.innerHTML = `<span class="error">Public key tidak boleh kosong!</span>`;
+        return;
       }
 
-      // Prefix 0x00 (Ed25519)
-      const prefixed = new Uint8Array(1 + pubKeyBytes.length);
-      prefixed[0] = 0;
-      prefixed.set(pubKeyBytes, 1);
+      try {
+        statusEl.innerHTML = `<span class="loading">Mengonversi Public Key menjadi alamat Sui...</span>`;
 
-      // Hash BLAKE2b → 32 byte
-      const hashBytes = blake2b(prefixed, null, 32);
-      const suiAddress = "0x" + toHex(hashBytes);
+        // Decode Base64 public key
+        let publicKeyBytes = Uint8Array.from(atob(publicKeyBase64), c => c.charCodeAt(0));
 
-      console.log("Sui Address:", suiAddress);
+        // Hash BLAKE2b-256
+        let hash = blake2b(publicKeyBytes, null, 32);
 
-      const apiKey = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1";
-      const resp = await fetch(`https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${suiAddress}?page=0&size=20&orderBy=DESC&sortBy=TIMESTAMP`, {
-        headers: {
-          "accept": "application/json",
-          "x-api-key": apiKey
-        }
-      });
+        // Ambil 32 byte terakhir → Address
+        let addressHex = Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('');
 
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status} - ${resp.statusText}`);
+        statusEl.innerHTML = `<span class="loading">Alamat Sui: ${addressHex} — Mengambil blob history...</span>`;
+
+        // Fetch dari API kamu
+        const API_KEY = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1";
+        let resp = await fetch(`https://walrus-api.onrender.com/api/blobs/${addressHex}?apikey=${API_KEY}`);
+        
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        
+        let data = await resp.json();
+
+        statusEl.innerHTML = `<span style="color:green;">Selesai!</span>`;
+        hasilEl.innerHTML = `<b>Blob ID Base64:</b> ${data.blobIdBase64 || '-'}<br>
+                             <b>Waktu:</b> ${data.timestamp || '-'}`;
+
+      } catch (err) {
+        statusEl.innerHTML = `<span class="error">Error: ${err.message}</span>`;
       }
-
-      const data = await resp.json();
-
-      if (!data.data || data.data.length === 0) {
-        hasilEl.innerHTML = `<p>Sui Address: <b>${suiAddress}</b></p><p>Tidak ada blob ditemukan.</p>`;
-      } else {
-        let html = `<p>Sui Address: <b>${suiAddress}</b></p>`;
-        html += "<table><tr><th>Blob ID Base64</th><th>Dibuat</th></tr>";
-        for (const blob of data.data) {
-          html += `<tr><td>${blob.blobIdBase64}</td><td>${blob.createdAt}</td></tr>`;
-        }
-        html += "</table>";
-        hasilEl.innerHTML = html;
-      }
-    } catch (err) {
-      hasilEl.innerHTML = `<p style="color:red;">Error: ${err.message}</p>`;
-    } finally {
-      loadingEl.style.display = "none";
     }
-  }
+  </script>
 
-  function toHex(bytes) {
-    return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
-  }
-</script>
 </body>
 </html>

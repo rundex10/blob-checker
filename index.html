@@ -13,7 +13,7 @@
   </style>
 </head>
 <body>
-  <h2>Cek Blob Walrus - Public Key Soundness</h2>
+  <h2>Cek Blob Walrus dari Public Key Soundness</h2>
   <p>Paste <b>Public Key</b> dari <code>soundness-cli list-keys</code>:</p>
   <input type="text" id="pubkey" placeholder="ThwbEh6idRlMGs/...">
   <button onclick="cekBlob()">Cek</button>
@@ -49,7 +49,7 @@
 
       console.log("Sui Address:", suiAddress);
 
-      const apiKey = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1"; // API Key kamu
+      const apiKey = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1";
       const resp = await fetch(`https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${suiAddress}?page=0&size=20&orderBy=DESC&sortBy=TIMESTAMP`, {
         headers: {
           "accept": "application/json",

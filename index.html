@@ -13,14 +13,34 @@
   </style>
 </head>
 <body>
-  <h2>Cek Blob Walrus dari Public Key Soundness</h2>
+  <h2>Cek Blob Walrus Public Key Soundness</h2>
   <p>Paste <b>Public Key</b> dari <code>soundness-cli list-keys</code>:</p>
   <input type="text" id="pubkey" placeholder="ThwbEh6idRIMgs/...">
   <button onclick="cekBlob()">Cek</button>
   <div id="loading">⏳ Mengonversi public key & mengambil data...</div>
   <div id="hasil"></div>
 
+  <script>
+    // BLAKE2b murni JS (32-byte) dari https://github.com/dcposch/blakejs
+    // Disalin agar tidak perlu import Node util
+    (function(){
+      function BLAKE2b(length) {
+        this.ctx = blake2bInit(length);
+      }
+      BLAKE2b.prototype.update = function(input) {
+        blake2bUpdate(this.ctx, input);
+      };
+      BLAKE2b.prototype.digest = function() {
+        return blake2bFinal(this.ctx);
+      };
+
+      // --- blake2b functions here ---
+      // Potong agar ringkas: kamu bisa ambil file blake2b lengkap dari blakejs github
+      // atau pakai CDN:
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/blakejs@1.2.1/blake2b.min.js"></script>
+
   <script>
     async function cekBlob() {
       const pubKeyBase64 = document.getElementById("pubkey").value.trim();
@@ -30,24 +50,20 @@
       loadingEl.style.display = "block";
 
       try {
-        // Decode Base64 → Uint8Array
         const pubKeyBytes = Uint8Array.from(atob(pubKeyBase64), c => c.charCodeAt(0));
         if (pubKeyBytes.length !== 32) {
           throw new Error("Public key harus 32 byte (Ed25519)");
         }
 
-        // Prefix 0x00 (Ed25519 scheme)
         const prefixed = new Uint8Array(1 + pubKeyBytes.length);
-        prefixed[0] = 0; // 0x00 untuk Ed25519
+        prefixed[0] = 0;
         prefixed.set(pubKeyBytes, 1);
 
-        // Blake2b 32 byte → ambil hex address
         const hash = blake2b(prefixed, null, 32);
         const suiAddress = "0x" + Array.from(hash).map(b => b.toString(16).padStart(2, "0")).join("");
 
         console.log("Sui Address:", suiAddress);
 
-        // Panggil API Blockberry
         const apiKey = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1";
         const resp = await fetch(`https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${suiAddress}`, {
           headers: {

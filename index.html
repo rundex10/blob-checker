@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>Cek Blob Walrus dari Public Key atau Address</title>
+<title>Cek Blob Walrus</title>
 <script src="https://cdn.jsdelivr.net/npm/blakejs@1.2.1/blake2b.min.js"></script>
 <style>
     body { font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9; }
@@ -24,7 +24,7 @@
 <table id="resultTable" style="display:none;">
     <thead>
         <tr>
-            <th>Blob Base64</th>
+            <th>Blob list</th>
             <th>Waktu Dibuat</th>
         </tr>
     </thead>
@@ -39,7 +39,7 @@ async function cekBlob() {
         return;
     }
 
-    document.getElementById('status').innerText = "⏳ Mengonversi / Mengambil data...";
+    document.getElementById('status').innerText = "⏳ Memproses...";
     document.getElementById('resultTable').style.display = "none";
 
     let address = val;
@@ -48,9 +48,9 @@ async function cekBlob() {
     if (!val.startsWith("0x")) {
         try {
             address = publicKeyToSuiAddress(val);
-            document.getElementById('status').innerText = "✅ Public key berhasil dikonversi ke address: " + address;
+            document.getElementById('status').innerText = "✅ Public key dikonversi ke address: " + address;
         } catch (e) {
-            document.getElementById('status').innerText = "❌ Public key tidak valid!";
+            document.getElementById('status').innerText = "❌ Public key tidak valid: " + e.message;
             return;
         }
     } else {
@@ -89,11 +89,7 @@ function tampilkanData(content) {
             let tr = document.createElement("tr");
 
             let tdBlob = document.createElement("td");
-            let a = document.createElement("a");
-            a.href = "#";
-            a.innerText = item.blobIdBase64;
-            a.onclick = () => { navigator.clipboard.writeText(item.blobBase64); alert("BlobBase64 disalin!"); return false; };
-            tdBlob.appendChild(a);
+            tdBlob.innerText = item.blobIdBase64;
 
             let tdTime = document.createElement("td");
             let date = new Date(item.timestamp / 1_000_000).toLocaleString();
@@ -108,10 +104,29 @@ function tampilkanData(content) {
 }
 
 function publicKeyToSuiAddress(base64Key) {
-    const publicKeyBytes = Uint8Array.from(atob(base64Key), c => c.charCodeAt(0));
+    // Tambahkan padding jika hilang
+    while (base64Key.length % 4 !== 0) {
+        base64Key += "=";
+    }
+
+    // Decode Base64
+    let publicKeyBytes;
+    try {
+        publicKeyBytes = Uint8Array.from(atob(base64Key), c => c.charCodeAt(0));
+    } catch {
+        throw new Error("Base64 tidak valid");
+    }
+
+    if (publicKeyBytes.length !== 32) {
+        throw new Error("Panjang public key bukan 32 byte (bukan ed25519)");
+    }
+
+    // Prefix 0x00 untuk ed25519
     const prefixed = new Uint8Array(publicKeyBytes.length + 1);
-    prefixed[0] = 0x00; // ed25519 flag
+    prefixed[0] = 0x00;
     prefixed.set(publicKeyBytes, 1);
+
+    // Hash Blake2b-256
     const hash = blake2b(prefixed, null, 32);
     return "0x" + Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('');
 }

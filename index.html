@@ -3,66 +3,81 @@
 <head>
   <meta charset="UTF-8">
   <title>Cek Blob Walrus dari Public Key Soundness</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    input { width: 500px; padding: 8px; }
+    button { padding: 8px 12px; }
+    table { border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    #loading { display: none; margin-top: 10px; }
+  </style>
 </head>
 <body>
   <h2>Cek Blob Walrus dari Public Key Soundness</h2>
-  <input id="pubkey" type="text" placeholder="Paste Public Key Soundness di sini" style="width: 400px;">
+  <p>Paste <b>Public Key</b> dari <code>soundness-cli list-keys</code>:</p>
+  <input type="text" id="pubkey" placeholder="ThwbEh6idRIMgs/...">
   <button onclick="cekBlob()">Cek</button>
-  <pre id="result"></pre>
+  <div id="loading">⏳ Mengonversi public key & mengambil data...</div>
+  <div id="hasil"></div>
 
-<script type="module">
-import { blake2b } from "https://cdn.jsdelivr.net/npm/@noble/hashes@1.3.2/blake2b.js";
+  <script src="https://cdn.jsdelivr.net/npm/blakejs@1.2.1/blake2b.min.js"></script>
+  <script>
+    async function cekBlob() {
+      const pubKeyBase64 = document.getElementById("pubkey").value.trim();
+      const loadingEl = document.getElementById("loading");
+      const hasilEl = document.getElementById("hasil");
+      hasilEl.innerHTML = "";
+      loadingEl.style.display = "block";
 
-async function publicKeyToSuiAddress(pubKeyB64) {
-    try {
-        const rawKey = Uint8Array.from(atob(pubKeyB64), c => c.charCodeAt(0));
-        if (rawKey.length !== 32) {
-            throw new Error("Public key harus 32 byte setelah Base64 decode");
+      try {
+        // Decode Base64 → Uint8Array
+        const pubKeyBytes = Uint8Array.from(atob(pubKeyBase64), c => c.charCodeAt(0));
+        if (pubKeyBytes.length !== 32) {
+          throw new Error("Public key harus 32 byte (Ed25519)");
         }
-        // Prefix 0x00 untuk Ed25519
-        const prefixed = new Uint8Array(1 + rawKey.length);
-        prefixed[0] = 0x00;
-        prefixed.set(rawKey, 1);
-        const hash = blake2b(prefixed, { dkLen: 32 });
-        return "0x" + Array.from(hash).map(b => b.toString(16).padStart(2, "0")).join("");
-    } catch (e) {
-        throw new Error("Public key tidak valid: " + e.message);
-    }
-}
 
-async function cekBlob() {
-    const pubKey = document.getElementById("pubkey").value.trim();
-    const output = document.getElementById("result");
-    output.textContent = "Mengonversi public key menjadi alamat Sui...\n";
-    try {
-        const suiAddress = await publicKeyToSuiAddress(pubKey);
-        output.textContent += `Alamat Sui: ${suiAddress}\n\nMengambil blob history...\n`;
+        // Prefix 0x00 (Ed25519 scheme)
+        const prefixed = new Uint8Array(1 + pubKeyBytes.length);
+        prefixed[0] = 0; // 0x00 untuk Ed25519
+        prefixed.set(pubKeyBytes, 1);
 
-        const apiKey = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1"; // ganti dengan API key Blockberry
-        const url = `https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${suiAddress}`;
-        const res = await fetch(url, {
-            headers: {
-                "accept": "application/json",
-                "x-api-key": apiKey
-            }
+        // Blake2b 32 byte → ambil hex address
+        const hash = blake2b(prefixed, null, 32);
+        const suiAddress = "0x" + Array.from(hash).map(b => b.toString(16).padStart(2, "0")).join("");
+
+        console.log("Sui Address:", suiAddress);
+
+        // Panggil API Blockberry
+        const apiKey = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1";
+        const resp = await fetch(`https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${suiAddress}`, {
+          headers: {
+            "accept": "application/json",
+            "x-api-key": apiKey
+          }
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
 
-        if (!data || data.length === 0) {
-            output.textContent += "Tidak ada blob ditemukan.";
-            return;
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status} - ${resp.statusText}`);
         }
 
-        let resultText = "Daftar Blob:\n";
-        for (const blob of data) {
-            resultText += `- blobIdBase64: ${blob.blobIdBase64}\n  createdAt: ${blob.createdAt}\n\n`;
+        const data = await resp.json();
+
+        if (!data.data || data.data.length === 0) {
+          hasilEl.innerHTML = "<p>Tidak ada blob ditemukan.</p>";
+        } else {
+          let html = "<table><tr><th>Blob Base64</th><th>Dibuat</th></tr>";
+          for (const blob of data.data) {
+            html += `<tr><td>${blob.blobIdBase64}</td><td>${blob.createdAt}</td></tr>`;
+          }
+          html += "</table>";
+          hasilEl.innerHTML = html;
         }
-        output.textContent = resultText;
-    } catch (err) {
-        output.textContent += "Error: " + err.message;
+      } catch (err) {
+        hasilEl.innerHTML = `<p style="color:red;">Error: ${err.message}</p>`;
+      } finally {
+        loadingEl.style.display = "none";
+      }
     }
-}
-</script>
+  </script>
 </body>
 </html>

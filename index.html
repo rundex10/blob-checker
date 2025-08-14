@@ -1,116 +1,113 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Cek Blob Walrus (Soundness)</title>
-  <style>
-    body{font-family:system-ui,Arial,sans-serif;max-width:800px;margin:40px auto;padding:0 16px}
-    h1{font-size:20px}
-    .row{display:flex;gap:8px}
-    input{flex:1;padding:10px;border:1px solid #ccc;border-radius:8px}
-    button{padding:10px 14px;border:0;border-radius:8px;cursor:pointer}
-    .hint{color:#666;font-size:12px;margin-top:6px}
-    .item{padding:8px 0;border-bottom:1px dashed #eee}
-    .b64{font-family:monospace;word-break:break-all;cursor:pointer}
-    .muted{color:#666;font-size:12px}
-    .err{color:#b00020}
-  </style>
+    <meta charset="UTF-8">
+    <title>Cek Blob Walrus dari Address/Public Key</title>
+    <script src="https://cdn.jsdelivr.net/npm/blakejs@1.2.1/blake2b.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }
+        input { width: 500px; padding: 5px; }
+        button { padding: 6px 12px; }
+        table { border-collapse: collapse; margin-top: 20px; width: 100%; background: white; }
+        th, td { border: 1px solid #ddd; padding: 8px; }
+        th { background: #333; color: white; }
+    </style>
 </head>
 <body>
-  <h1>Cek Blob Walrus dari Alamat Sui</h1>
-  <div class="hint">
-    Paste <b>alamat/public key Sui</b> yang dipakai di Soundness (lihat dengan <code>soundness-cli list-keys</code>).
-  </div>
+    <h2>Cek Blob Walrus dari Address atau Public Key Sui</h2>
+    <input type="text" id="inputValue" placeholder="Paste address atau public key Base64 di sini">
+    <button onclick="cekBlob()">Cek</button>
+    <div id="status"></div>
+    <table id="resultTable">
+        <thead>
+            <tr>
+                <th>Blob Base64</th>
+                <th>Waktu Dibuat</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
 
-  <form id="form" class="row" autocomplete="off">
-    <input id="addr" placeholder="contoh: 0xe2964015d7...ee060" required />
-    <button id="check" type="submit">Cek</button>
-  </form>
-
-  <div class="hint">Tips: klik blobBase64 untuk <i>copy</i>.</div>
-  <div id="status" class="muted" style="margin-top:10px;"></div>
-  <div id="list" style="margin-top:12px;"></div>
-  <div id="moreWrap" style="margin-top:12px;display:none">
-    <button id="moreBtn">Muat lagi</button>
-  </div>
-
-  <script>
-    const API_KEY = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1"; // TODO: ganti dengan API key kamu
-    const BASE = "https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts";
-    let page = 0, lastAddress = "", busy = false;
-
-    const el = (id) => document.getElementById(id);
-    const statusEl = el('status'), listEl = el('list'), moreWrap = el('moreWrap'), moreBtn = el('moreBtn');
-
-    function fmtTime(ts){
-      try{ return new Date(ts).toLocaleString(); }catch{ return ts }
-    }
-    function line(blob){
-      const wrap = document.createElement('div');
-      wrap.className = 'item';
-      const b64 = document.createElement('div');
-      b64.className = 'b64';
-      b64.textContent = blob.blobIdBase64 || "(tanpa blobBase64)";
-      b64.title = "Klik untuk copy";
-      b64.addEventListener('click', async () => {
-        try { await navigator.clipboard.writeText(b64.textContent); b64.style.opacity = 0.6; setTimeout(()=>b64.style.opacity=1,400); }
-        catch(e){ alert('Gagal menyalin'); }
-      });
-      const time = document.createElement('div');
-      time.className = 'muted';
-      time.textContent = fmtTime(blob.timestamp);
-      wrap.appendChild(b64);
-      wrap.appendChild(time);
-      return wrap;
+<script>
+async function cekBlob() {
+    let val = document.getElementById('inputValue').value.trim();
+    if (!val) {
+        alert("Masukkan address atau public key!");
+        return;
     }
 
-    async function fetchPage(address, pg){
-      const url = `${BASE}/${encodeURIComponent(address)}?page=${pg}&size=20&orderBy=DESC&sortBy=TIMESTAMP`;
-      const res = await fetch(url, { headers: { accept: "*/*", "x-api-key": API_KEY } });
-      if(!res.ok){
-        const text = await res.text().catch(()=>res.statusText);
-        throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
-      }
-      return res.json();
-    }
-
-    async function load(address, reset=false){
-      if(busy) return;
-      busy = true;
-      statusEl.textContent = "Loading...";
-      try{
-        if(reset){ listEl.innerHTML = ""; page = 0; }
-        const data = await fetchPage(address, page);
-        const items = (data && data.content) ? data.content : [];
-        if(items.length === 0 && page === 0){
-          statusEl.textContent = "Tidak ada blob ditemukan.";
-          moreWrap.style.display = "none";
-          busy = false;
-          return;
+    let address = val;
+    // Deteksi jika input adalah public key (Base64, panjang biasanya < 60)
+    if (!val.startsWith("0x")) {
+        try {
+            address = publicKeyToSuiAddress(val);
+            console.log("Public key dikonversi ke address:", address);
+        } catch (e) {
+            alert("Public key tidak valid!");
+            return;
         }
-        items.forEach(b => listEl.appendChild(line(b)));
-        statusEl.textContent = `Menampilkan ${listEl.children.length} item`;
-        // tampilkan tombol "Muat lagi" jika masih ada halaman berikutnya
-        moreWrap.style.display = items.length === 20 ? "block" : "none";
-        page++;
-      }catch(err){
-        statusEl.innerHTML = `<span class="err">${err.message}</span>`;
-        moreWrap.style.display = "none";
-      }finally{
-        busy = false;
-      }
     }
 
-    el('form').addEventListener('submit', (e)=>{
-      e.preventDefault();
-      const address = el('addr').value.trim();
-      if(!address) return;
-      lastAddress = address;
-      load(address, true);
-    });
+    document.getElementById('status').innerText = "Mengambil data blob...";
+    let apiKey = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1";
+    let url = `https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${address}?page=0&size=20&orderBy=DESC&sortBy=TIMESTAMP`;
 
-    moreBtn.addEventListener('click', ()=>{ if(lastAddress) load(lastAddress, false); });
-  </script>
+    try {
+        let res = await fetch(url, {
+            headers: {
+                "accept": "*/*",
+                "x-api-key": apiKey
+            }
+        });
+        if (!res.ok) {
+            document.getElementById('status').innerText = `HTTP ${res.status}: ${res.statusText}`;
+            return;
+        }
+        let data = await res.json();
+        tampilkanData(data.content);
+    } catch (err) {
+        console.error(err);
+        document.getElementById('status').innerText = "Gagal mengambil data!";
+    }
+}
+
+function tampilkanData(content) {
+    document.getElementById('status').innerText = "";
+    let tbody = document.querySelector("#resultTable tbody");
+    tbody.innerHTML = "";
+    if (!content || content.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='2'>Tidak ada blob ditemukan</td></tr>";
+        return;
+    }
+    content.forEach(item => {
+        let tr = document.createElement("tr");
+        let tdBlob = document.createElement("td");
+        let tdTime = document.createElement("td");
+
+        let a = document.createElement("a");
+        a.href = "#";
+        a.innerText = item.blobIdBase64;
+        a.onclick = () => { navigator.clipboard.writeText(item.blobBase64); alert("BlobBase64 disalin!"); return false; };
+        tdBlob.appendChild(a);
+
+        let date = new Date(item.timestamp / 1_000_000).toLocaleString();
+        tdTime.innerText = date;
+
+        tr.appendChild(tdBlob);
+        tr.appendChild(tdTime);
+        tbody.appendChild(tr);
+    });
+}
+
+// Konversi public key base64 → address Sui
+function publicKeyToSuiAddress(base64Key) {
+    const publicKeyBytes = Uint8Array.from(atob(base64Key), c => c.charCodeAt(0));
+    const prefixed = new Uint8Array(publicKeyBytes.length + 1);
+    prefixed[0] = 0x00;
+    prefixed.set(publicKeyBytes, 1);
+    const hash = blake2b(prefixed, null, 32);
+    return "0x" + Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+</script>
 </body>
 </html>

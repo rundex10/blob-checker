@@ -37,7 +37,7 @@
           let html = '';
           data.content.forEach(blob => {
             const waktu = new Date(blob.timestamp).toLocaleString();
-            html += `${blob.blobId} - ${waktu}<br>`;
+            html += `${blob.blobBase64} - ${waktu}<br>`;
           });
           resultDiv.innerHTML = html;
         } else {

@@ -1,75 +1,231 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Cek Blob Walrus dari Public Key Soundness</title>
-   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    h2 { color: #333; }
-    input { padding: 8px; width: 400px; }
-    button { padding: 8px 12px; }
-    .loading { color: orange; }
-    .error { color: red; }
-    .result { margin-top: 10px; padding: 10px; border: 1px solid #ddd; }
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; }
+    h1 { margin: 0 0 16px; font-size: 22px; }
+    .row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    input { flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid #ccc; }
+    button { padding: 10px 14px; border: 0; border-radius: 10px; cursor: pointer; background:#1e88e5; color:#fff; }
+    button:disabled { opacity:.6; cursor:not-allowed; }
+    .muted { color: #666; font-size: 13px; margin-bottom: 12px; }
+    .status { margin: 8px 0 0; min-height: 22px; }
+    .ok { color: #2e7d32; }
+    .err { color: #c62828; }
+    .addr { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { border-bottom: 1px solid #e0e0e0; padding: 10px 8px; text-align: left; vertical-align: top; }
+    th { background: #f5f5f5; position: sticky; top: 0; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; word-break: break-all; }
+    .hint { font-size:12px; color:#777; margin-top:6px;}
   </style>
 </head>
 <body>
+  <h1>Cek Blob Walrus</h1>
+  <div class="muted">Paste <b>public key Base64</b> dari <code>soundness-cli list-keys</code>. Kami akan mengonversinya ke <b>alamat Sui</b> lalu menampilkan <b>blobIdBase64</b> & waktu dibuat.</div>
 
-  <h2>Cek Blob Walrus y Public Key Soundness</h2>
-  <p>Paste <b>Public Key</b> dari <code>soundness-cli list-keys</code>:</p>
-  <input type="text" id="publicKey" placeholder="Masukkan Public Key Base64">
-  <button onclick="cekBlob()">Cek</button>
+  <div class="row">
+    <input id="pk" placeholder="Contoh: ThwbEh6idRlMGs/wETYIscg9eMjxQg3c2RNHb3PkC2c=" />
+    <button id="cekBtn" onclick="run()">Cek</button>
+  </div>
 
-  <div id="status"></div>
-  <div id="hasil" class="result"></div>
+  <div id="status" class="status"></div>
+  <div id="address" class="addr"></div>
+  <div id="results"></div>
 
-  <!-- BlakeJS CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/blakejs@1.2.1/blake2b.min.js"></script>
+<script>
+/* ========== BLAKE2b PURE JS (diambil & disederhanakan dari blakejs, tanpa Node util) ========== */
+/* Lisensi publik domain/CC0 sesuai implementasi aslinya (dcposch/blakejs) */
+(function(){
+  const B32 = 0x100000000;
+  function toUint32(x){ return x >>> 0; }
+  function _rotr64(h,l,s){
+    return s>32 ? [ (l>>> (s-32)) | (h<< (64-s)), (h>>> (s-32)) | (l<< (64-s)) ] :
+                  [ (h>>> s) | (l<< (32-s)), (l>>> s) | (h<< (32-s)) ];
+  }
+  const IV = new Uint32Array([
+    0xF3BCC908,0x6A09E667, 0x84CAA73B,0xBB67AE85, 0xFE94F82B,0x3C6EF372, 0x5F1D36F1,0xA54FF53A,
+    0xADE682D1,0x510E527F, 0x2B3E6C1F,0x9B05688C, 0xFB41BD6B,0x1F83D9AB, 0x137E2179,0x5BE0CD19
+  ]);
+  const SIGMA = [
+    0,1, 2,3, 4,5, 6,7, 8,9,10,11,12,13,14,15,
+    14,10, 4,8, 9,15,13,6, 1,12, 0,2,11,7,5,3,
+    11,8,12,0,5,2,15,13,10,14,3,6,7,1,9,4,
+    7,9,3,1,13,12,11,14,2,6,5,10,4,0,15,8,
+    9,0,5,7,2,4,10,15,14,1,11,12,6,8,3,13,
+    2,12,6,10,0,11,8,3,4,13,7,5,15,14,1,9,
+    12,5,1,15,14,13,4,10,0,7,6,3,9,2,8,11,
+    13,11,7,14,12,1,3,9,5,0,15,4,8,6,2,10,
+    6,15,14,9,11,3,0,8,12,2,13,7,1,4,10,5,
+    10,2,8,4,7,6,1,5,15,11,9,14,3,12,13,0
+  ];
+  function B2b(ctx, blocks){
+    const v = new Uint32Array(32), m = new Uint32Array(32);
+    for (let i=0;i<blocks.length;i+=128){
+      // t (bytes counter)
+      ctx.t_low = (ctx.t_low + 128) >>> 0;
+      if (ctx.t_low === 0) ctx.t_high = (ctx.t_high + 1) >>> 0;
 
-  <script>
-    async function cekBlob() {
-      const statusEl = document.getElementById("status");
-      const hasilEl = document.getElementById("hasil");
-      hasilEl.innerHTML = "";
-      statusEl.innerHTML = "";
+      for (let j=0;j<32;j++) m[j] = (blocks[i+4*j] | (blocks[i+4*j+1]<<8) | (blocks[i+4*j+2]<<16) | (blocks[i+4*j+3]<<24))>>>0;
 
-      let publicKeyBase64 = document.getElementById("publicKey").value.trim();
-      if (!publicKeyBase64) {
-        statusEl.innerHTML = `<span class="error">Public key tidak boleh kosong!</span>`;
-        return;
+      for (let j=0;j<16;j++){ v[j] = ctx.h[j]; v[j+16] = IV[j]; }
+      v[24]^= ctx.t_low; v[25]^= ctx.t_high; if (i+128===blocks.length && ctx.last) { v[28]^= 0xFFFFFFFF; v[29]^= 0xFFFFFFFF; }
+
+      for (let r=0;r<12;r++){
+        const s = r*32;
+        G(0,4,8,12,   SIGMA[s+0], SIGMA[s+1]);
+        G(1,5,9,13,   SIGMA[s+2], SIGMA[s+3]);
+        G(2,6,10,14,  SIGMA[s+4], SIGMA[s+5]);
+        G(3,7,11,15,  SIGMA[s+6], SIGMA[s+7]);
+        G(0,5,10,15,  SIGMA[s+8], SIGMA[s+9]);
+        G(1,6,11,12,  SIGMA[s+10], SIGMA[s+11]);
+        G(2,7,8,13,   SIGMA[s+12], SIGMA[s+13]);
+        G(3,4,9,14,   SIGMA[s+14], SIGMA[s+15]);
       }
-
-      try {
-        statusEl.innerHTML = `<span class="loading">Mengonversi Public Key menjadi alamat Sui...</span>`;
-
-        // Decode Base64 public key
-        let publicKeyBytes = Uint8Array.from(atob(publicKeyBase64), c => c.charCodeAt(0));
-
-        // Hash BLAKE2b-256
-        let hash = blake2b(publicKeyBytes, null, 32);
-
-        // Convert ke hex address
-        let addressHex = Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('');
-
-        statusEl.innerHTML = `<span class="loading">Alamat Sui: ${addressHex} — Mengambil blob history...</span>`;
-
-        // Panggil API
-        const API_KEY = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1";
-        let resp = await fetch(`https://walrus-api.onrender.com/api/blobs/${addressHex}?apikey=${API_KEY}`);
-        
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        
-        let data = await resp.json();
-
-        statusEl.innerHTML = `<span style="color:green;">Selesai!</span>`;
-        hasilEl.innerHTML = `<b>Blob ID Base64:</b> ${data.blobIdBase64 || '-'}<br>
-                             <b>Waktu:</b> ${data.timestamp || '-'}`;
-
-      } catch (err) {
-        statusEl.innerHTML = `<span class="error">Error: ${err.message}</span>`;
-      }
+      for (let j=0;j<16;j++) ctx.h[j] = (ctx.h[j] ^ v[j] ^ v[j+16])>>>0;
     }
-  </script>
+    function G(a,b,c,d, xIdx, yIdx){
+      const x0=m[2*xIdx], x1=m[2*xIdx+1], y0=m[2*yIdx], y1=m[2*yIdx+1];
+      add64(a,d,x0,x1); rotR(d,16); xor64(d,a);
+      add64(c,d,0,0);   rotR(c,12); xor64(c,d);
+      add64(b,c,y0,y1); rotR(b,8);  xor64(b,c);
+      add64(a,b,0,0);   rotR(a,7);  xor64(a,b);
+    }
+    function add64(i,j,lo,hi){
+      const ai=i*2, aj=j*2;
+      let l = (v[ai] + lo)>>>0;
+      let carry = (l < v[ai]) ? 1:0;
+      let h = (v[ai+1] + hi + carry)>>>0;
+      v[ai]=l; v[ai+1]=h;
+    }
+    function xor64(i,j){
+      const ai=i*2, aj=j*2;
+      v[ai] ^= v[aj]; v[ai+1] ^= v[aj+1];
+    }
+    function rotR(i,s){
+      const ai=i*2;
+      const res = _rotr64(v[ai+1], v[ai], s);
+      v[ai+1]=res[0]>>>0; v[ai]=res[1]>>>0;
+    }
+  }
+  function blake2bInit(outlen=32, key){
+    const ctx = { h:new Uint32Array(16), t_low:0, t_high:0, last:false, outlen };
+    for (let i=0;i<16;i++) ctx.h[i]=IV[i];
+    ctx.h[0]^= (0x01010000 ^ outlen)>>>0;
+    if (key) {
+      const block = new Uint8Array(128); block.set(key);
+      blake2bUpdate(ctx, block);
+    }
+    return ctx;
+  }
+  function blake2bUpdate(ctx, input){
+    const bytes = (input instanceof Uint8Array)? input : new Uint8Array(input);
+    const blocks = bytes;
+    B2b(ctx, blocks);
+  }
+  function blake2bFinal(ctx){
+    if (ctx.last) return;
+    ctx.last = true;
+    // feed empty block to mark last
+    B2b(ctx, new Uint8Array(0));
+    const out = new Uint8Array(ctx.outlen);
+    for (let i=0;i<ctx.outlen;i++){
+      const w = ctx.h[(i/4)|0];
+      out[i] = (w >>> (8*(i&3))) & 0xff;
+    }
+    return out;
+  }
+  // expose simple API: blake2b(inputUint8Array, outlen)
+  window.blake2bSimple = function(inputUint8Array, outlen=32){
+    const ctx = blake2bInit(outlen);
+    blake2bUpdate(ctx, inputUint8Array);
+    return blake2bFinal(ctx);
+  }
+})();
+/* ============================== END BLAKE2b ============================== */
 
+const API_KEY = "39Ki3kPJFMJ9eukD5yrpWJkNWX7Qm1";
+
+// helper
+const toHex = (u8) => Array.from(u8).map(b=>b.toString(16).padStart(2,'0')).join('');
+const fmtTime = (ns) => {
+  // Blockberry walrus-mainnet account endpoint: timestamp in nanoseconds
+  const ms = Math.floor(Number(ns)/1_000_000);
+  return new Date(ms).toLocaleString();
+};
+
+async function run(){
+  const btn = document.getElementById('cekBtn');
+  const status = document.getElementById('status');
+  const addrEl = document.getElementById('address');
+  const results = document.getElementById('results');
+  results.innerHTML = '';
+  addrEl.textContent = '';
+  status.className = 'status';
+  status.textContent = '';
+  btn.disabled = true;
+
+  try {
+    let pk = document.getElementById('pk').value.trim();
+    if (!pk) throw new Error('Public key tidak boleh kosong.');
+    // tambahkan padding base64 bila hilang
+    while (pk.length % 4 !== 0) pk += '=';
+
+    // decode base64 → bytes
+    let bytes;
+    try { bytes = Uint8Array.from(atob(pk), c=>c.charCodeAt(0)); }
+    catch { throw new Error('Public key bukan Base64 yang valid.'); }
+    if (bytes.length !== 32) throw new Error('Public key harus 32 byte (Ed25519).');
+
+    status.textContent = 'Mengonversi public key → alamat Sui…';
+    // Sui uses blake2b-256 over [schemeFlag(0x00) | pubkey]
+    const prefixed = new Uint8Array(1 + bytes.length);
+    prefixed[0] = 0x00; // ed25519
+    prefixed.set(bytes, 1);
+    const hash = window.blake2bSimple(prefixed, 32);
+    const suiAddress = '0x' + toHex(hash);
+    addrEl.innerHTML = `Alamat Sui: <span class="addr mono">${suiAddress}</span>`;
+    status.textContent = 'Mengambil riwayat blob dari Blockberry…';
+
+    // panggil Blockberry
+    const url = `https://api.blockberry.one/walrus-mainnet/v1/blobs/accounts/${suiAddress}?page=0&size=50&orderBy=DESC&sortBy=TIMESTAMP`;
+    const resp = await fetch(url, { headers: { 'accept':'application/json', 'x-api-key': API_KEY } });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
+    const data = await resp.json();
+
+    // bentuk data: { content: [ { blobIdBase64, timestamp, ... }, ... ], ... }
+    const list = Array.isArray(data.content) ? data.content : (Array.isArray(data.data)? data.data : []);
+    if (!list.length){
+      status.className = 'status ok';
+      status.textContent = 'Tidak ada blob ditemukan.';
+      results.innerHTML = '<div class="hint">Tips: Coba tingkatkan <code>size</code> pada URL atau pastikan address benar.</div>';
+      return;
+    }
+
+    status.className = 'status ok';
+    status.textContent = `Ditemukan ${list.length} blob.`;
+
+    // render tabel
+    let html = '<table><thead><tr><th>blobIdBase64</th><th>Waktu dibuat</th></tr></thead><tbody>';
+    for (const it of list){
+      const id = it.blobIdBase64 || it.blobBase64 || it.blobId || '-';
+      const t  = it.timestamp ? fmtTime(it.timestamp) : (it.createdAt || '-');
+      html += `<tr><td class="mono">${id}</td><td>${t}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    results.innerHTML = html;
+
+  } catch (e){
+    status.className = 'status err';
+    status.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
 </body>
 </html>
